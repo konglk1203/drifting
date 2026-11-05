@@ -54,7 +54,11 @@ def run_init():
     global _did_run_init
     if _did_run_init:
         return
-    jax.distributed.initialize()
+    try:
+        jax.distributed.initialize()
+    except Exception as _e:
+        # single-host GPU debug: no coordinator, use local devices
+        print(f'[run_init] skipping jax.distributed.initialize(): {_e}')
     _did_run_init = True
 
 

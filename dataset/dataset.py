@@ -130,6 +130,36 @@ def create_imagenet_split(
         - Pixel postprocess returns `BCHW`.
     """
     del local
+    import os as _os
+    if _os.environ.get('DUMMY_DATA', '0') == '1':
+        # ---- debug-only synthetic latent loader (no ImageNet, no VAE) ----
+        import numpy as _np
+        import torch as _torch
+        _res_lat = 32  # SD-VAE latent spatial size for 256px
+        _nc = 4
+        _ncls = 1000
+        class _DummySampler:
+            def set_epoch(self, e):
+                pass
+        class _DummyLoader:
+            def __init__(self, bs):
+                self.bs = bs
+                self.sampler = _DummySampler()
+            def __len__(self):
+                return 1000  # arbitrary steps-per-epoch for infinite_sampler
+            def __iter__(self):
+                _rng = _np.random.default_rng(0)
+                while True:
+                    lat = _rng.standard_normal((self.bs, _res_lat, _res_lat, _nc)).astype('float32')
+                    lab = _rng.integers(0, _ncls, size=(self.bs,)).astype('int64')
+                    yield _torch.from_numpy(lat), _torch.from_numpy(lab)
+        def preprocess_fn(batch, rng=jax.random.PRNGKey(0)):
+            del rng
+            lat, lab = batch
+            return {'images': jnp.asarray(lat), 'labels': jnp.asarray(lab)}
+        def postprocess_fn(images):
+            return jnp.clip((images + 1) / 2, 0, 1)
+        return _DummyLoader(batch_size), preprocess_fn, postprocess_fn
     ds = _build_imagenet_dataset(
         resolution=resolution,
         use_aug=use_aug,

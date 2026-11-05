@@ -15,7 +15,11 @@ from tqdm import tqdm
 from einops import repeat, rearrange
 
 from dataset.dataset import infinite_sampler, get_postprocess_fn
-from drift_loss import drift_loss
+import os as _os
+from drift_loss import drift_loss as _official_drift_loss
+from sdot_drift_loss import sdot_drift_loss as _sdot_drift_loss
+# apple-to-apple switch: USE_SDOT=1 -> our SDOT-Drift loss, else official
+drift_loss = _sdot_drift_loss if _os.environ.get('USE_SDOT', '0') == '1' else _official_drift_loss
 from memory_bank import ArrayMemoryBank
 from models.mae_model import build_activation_function
 from utils.ckpt_util import save_checkpoint, restore_checkpoint, save_params_ema_artifact
@@ -358,7 +362,7 @@ def train_gen(
             )
             mu.sync_global_devices("save checkpoint finished")
 
-        if (step % eval_per_step == 0) or (step == 1) or (step == total_steps):
+        if (not (__import__('os').environ.get('SKIP_EVAL','0')=='1')) and ((step % eval_per_step == 0) or (step == 1) or (step == total_steps)):
             is_sanity = (step == 1)  # do a sanity check, to make sure FID env is working
 
             n_samples = 500 if is_sanity else eval_samples

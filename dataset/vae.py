@@ -1,4 +1,8 @@
-from diffusers.models import FlaxAutoencoderKL
+try:
+    from diffusers.models import FlaxAutoencoderKL
+except Exception:
+    FlaxAutoencoderKL = None  # diffusers>=0.40 dropped Flax VAE; only
+    # needed for image->latent preprocessing, not for training/debug.
 from functools import partial
 import jax.numpy as jnp
 import numpy as np
@@ -35,6 +39,14 @@ def vae_enc_decode(replicate_params: bool = True):
     if cache_key in _vae_cache:
         return _vae_cache[cache_key]
     
+    if FlaxAutoencoderKL is None:
+        # debug: no Flax VAE available -> dummy encode/decode (identity)
+        def _enc(images, rng):
+            return jnp.asarray(images).transpose(0, 2, 3, 1)  # BCHW->BHWC
+        def _dec(latents):
+            return jnp.asarray(latents).transpose(0, 3, 1, 2)  # BHWC->BCHW
+        _vae_cache[cache_key] = (_enc, _dec)
+        return _enc, _dec
     vae, vae_params = FlaxAutoencoderKL.from_pretrained("pcuenq/sd-vae-ft-mse-flax")
 
     # Replicate params across all devices/processes via global mesh.

@@ -9,7 +9,7 @@ def cdist(x, y, eps=1e-8):
     xnorms = jnp.einsum("bnd,bnd->bn", x, x)
     ynorms = jnp.einsum("bmd,bmd->bm", y, y)
     sq_dist = xnorms[:, :, None] + ynorms[:, None, :] - 2 * xydot
-    return jnp.sqrt(jnp.clip(sq_dist, a_min=eps))
+    return jnp.sqrt(jnp.clip(sq_dist, min=eps))
 
 @partial(jax.jit, static_argnames=("R_list",))
 def drift_loss(
@@ -70,12 +70,12 @@ def drift_loss(
         scale = weighted_dist.mean() / targets_w_in.mean() # [B]
         info["scale"] = scale
 
-        scale_inputs = jnp.clip(scale / jnp.sqrt(S), a_min=1e-3) # Normalize coords to have order 1
+        scale_inputs = jnp.clip(scale / jnp.sqrt(S), min=1e-3) # Normalize coords to have order 1
         old_gen_scaled = old_gen_in / scale_inputs
         targets_scaled = targets_in / scale_inputs
         
         # Normalize distance for kernel
-        dist_normed = dist / jnp.clip(scale, a_min=1e-3)
+        dist_normed = dist / jnp.clip(scale, min=1e-3)
         
         # --- Masking ---
         mask_val = 100.0
@@ -92,7 +92,7 @@ def drift_loss(
 
             affinity = jax.nn.softmax(logits, axis=-1)
             aff_transpose = jax.nn.softmax(logits, axis=-2)
-            affinity = jnp.sqrt(jnp.clip(affinity * aff_transpose, a_min=1e-6))
+            affinity = jnp.sqrt(jnp.clip(affinity * aff_transpose, min=1e-6))
 
             affinity = affinity * targets_w_in[:, None, :]
 
@@ -115,7 +115,7 @@ def drift_loss(
 
             info[f"loss_{R}"] = f_norm_val
 
-            force_scale = jnp.sqrt(jnp.clip(f_norm_val, a_min=1e-8)) # normalize force of each temperature
+            force_scale = jnp.sqrt(jnp.clip(f_norm_val, min=1e-8)) # normalize force of each temperature
             force_across_R = force_across_R + total_force_R / force_scale
 
         goal_scaled = old_gen_scaled + force_across_R
